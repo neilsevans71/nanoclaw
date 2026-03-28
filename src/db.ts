@@ -146,6 +146,8 @@ export function initDatabase(): void {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
   db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
   createSchema(db);
 
   // Migrate from JSON files if they exist
@@ -632,6 +634,32 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
     };
   }
   return result;
+}
+
+// --- Telegram monitor queries ---
+
+export interface UnknownTelegramChat {
+  jid: string;
+  name: string;
+  last_message_time: string;
+}
+
+/**
+ * Return Telegram chats that have sent messages but are not in registered_groups.
+ * Used by the zero-cost Telegram monitor to detect unknown senders.
+ */
+export function getUnknownTelegramChats(): UnknownTelegramChat[] {
+  return db
+    .prepare(
+      `
+    SELECT c.jid, c.name, c.last_message_time
+    FROM chats c
+    LEFT JOIN registered_groups r ON c.jid = r.jid
+    WHERE r.jid IS NULL
+      AND c.channel = 'telegram'
+  `,
+    )
+    .all() as UnknownTelegramChat[];
 }
 
 // --- JSON migration ---
