@@ -231,12 +231,9 @@ function buildContainerArgs(
   // API key mode: SDK sends x-api-key, proxy replaces with real key.
   // OAuth mode:   SDK exchanges placeholder token for temp API key,
   //               proxy injects real OAuth token on that exchange request.
-  const authMode = detectAuthMode();
-  if (authMode === 'api-key') {
-    args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
-  } else {
-    args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
-  }
+  // Route to local Ollama instead of Claude API (local-first, cost-free)
+  args.push('-e', 'OLLAMA_HOST=http://localhost:11434');
+  args.push('-e', 'OLLAMA_MODEL=qwen2.5-coder:7b');
 
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
