@@ -611,6 +611,7 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
     requires_trigger: number | null;
     is_main: number | null;
   }>;
+  logger.info({ rowCount: rows.length, rows: rows.map(r => ({ jid: r.jid, folder: r.folder })) }, 'getAllRegisteredGroups query result');
   const result: Record<string, RegisteredGroup> = {};
   for (const row of rows) {
     if (!isValidGroupFolder(row.folder)) {

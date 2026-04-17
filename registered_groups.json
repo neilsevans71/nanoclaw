@@ -1,0 +1,9 @@
+{
+  "tg:8575568489": {
+    "name": "Telegram Main",
+    "folder": "telegram_main",
+    "trigger": "^@Andy\\b",
+    "requiresTrigger": false,
+    "isMain": true
+  }
+}
