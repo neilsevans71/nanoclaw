@@ -13,7 +13,12 @@ import {
 import { startCredentialProxy } from './credential-proxy.js';
 import { startOllamaProxy } from './ollama-proxy.js';
 import { readEnvFile } from './env.js';
-import { isGemmaFailure, callHaikuFallback } from './haiku-fallback.js';
+import {
+  isGemmaFailure,
+  callHaikuFallback,
+  executeHaikuFallback,
+  type FallbackApproval,
+} from './haiku-fallback.js';
 import './channels/index.js';
 import {
   getChannelFactory,
@@ -81,6 +86,9 @@ let sessions: Record<string, string> = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
+
+// Pending Haiku fallback approvals (user must approve before API call)
+const pendingFallbacks = new Map<string, FallbackApproval>();
 
 const channels: Channel[] = [];
 const queue = new GroupQueue();
@@ -234,6 +242,81 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const prompt = formatMessages(missedMessages, TIMEZONE);
 
+  // Handle /haiku command for Haiku fallback approval/denial
+  if (prompt.match(/<message[^>]*>\/haiku\s*(yes|no)/i)) {
+    const approvalKey = `${chatJid}`;
+    const approval = pendingFallbacks.get(approvalKey);
+
+    if (!approval) {
+      await channel.sendMessage(
+        chatJid,
+        'No pending Gemma2 fallback request. Send a message and I\'ll ask if you want to use Haiku.',
+      );
+      return true;
+    }
+
+    if (Date.now() > approval.expiresAt) {
+      pendingFallbacks.delete(approvalKey);
+      await channel.sendMessage(
+        chatJid,
+        'Haiku approval request expired (5 min timeout). Please try your question again.',
+      );
+      return true;
+    }
+
+    const isApproved = prompt.match(/\/haiku\s*yes/i);
+
+    if (!isApproved) {
+      pendingFallbacks.delete(approvalKey);
+      await channel.sendMessage(
+        chatJid,
+        'Haiku fallback declined. Using Gemma2 response.',
+      );
+      return true;
+    }
+
+    // User approved — call Haiku and send response with cost tracking
+    try {
+      logger.info(
+        { group: group.name, chatJid },
+        'Haiku fallback approved, executing...',
+      );
+      const result = await executeHaikuFallback(
+        approval.userMessage,
+        approval.conversationHistory,
+        anthropicApiKey,
+      );
+      await channel.setTyping?.(chatJid, true);
+      await channel.sendMessage(chatJid, result.response);
+      await channel.setTyping?.(chatJid, false);
+      logger.info(
+        {
+          group: group.name,
+          chatJid,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        },
+        'Haiku fallback sent with usage tracking',
+      );
+      pendingFallbacks.delete(approvalKey);
+      lastAgentTimestamp[chatJid] =
+        missedMessages[missedMessages.length - 1].timestamp;
+      saveState();
+      return true;
+    } catch (err) {
+      logger.warn(
+        { group: group.name, chatJid, error: err },
+        'Haiku fallback failed',
+      );
+      await channel.sendMessage(
+        chatJid,
+        `Haiku API failed: ${err instanceof Error ? err.message : String(err)}. Using Gemma2 response.`,
+      );
+      pendingFallbacks.delete(approvalKey);
+      return true;
+    }
+  }
+
   // Check if this is an ops command (fast, no agent needed) — bypass trigger requirement
   if (isOpsCommand(prompt)) {
     const cmdName = parseOpsCommand(prompt);
@@ -338,26 +421,23 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       let text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.length} chars`);
 
-      // Check if Gemma failed and fall back to Haiku if needed
+      // Check if Gemma failed and prompt for approval before calling Haiku
       if (text && isGemmaFailure(text)) {
         logger.info(
           { group: group.name },
-          `Gemma failed to answer, falling back to Haiku...`,
+          `Gemma failed to answer, requesting user approval for Haiku`,
         );
-        try {
-          const haikuResponse = await callHaikuFallback(
-            prompt,
-            [],
-            anthropicApiKey,
-          );
-          text = haikuResponse;
-          logger.info({ group: group.name }, `Haiku fallback successful`);
-        } catch (err) {
-          logger.warn(
-            { group: group.name },
-            `Haiku fallback failed, using Gemma response: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
+        // Store pending fallback approval request (5 min timeout)
+        const approvalKey = `${chatJid}`;
+        pendingFallbacks.set(approvalKey, {
+          chatJid,
+          userMessage: prompt,
+          gemmaResponse: text,
+          expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+          conversationHistory: [],
+        });
+        // Send approval prompt to user
+        text = 'Gemma2 is unable to answer this query. Use Claude Haiku API instead? (/haiku yes or /haiku no)';
       }
 
       if (text) {

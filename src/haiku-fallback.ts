@@ -1,7 +1,15 @@
 /**
- * Haiku Fallback — Hybrid approach: try Gemma locally, fall back to Claude Haiku if needed
- * Detects when Gemma can't answer and automatically calls Haiku (Claude API)
+ * Haiku Fallback — Hybrid approach: try Gemma locally, require user approval for Haiku
+ * Detects when Gemma can't answer and prompts user before calling Haiku API (cost control)
  */
+
+export interface FallbackApproval {
+  chatJid: string;
+  userMessage: string;
+  gemmaResponse: string;
+  expiresAt: number; // timestamp when approval expires (5 min)
+  conversationHistory: ClaudeMessage[];
+}
 
 interface ClaudeMessage {
   role: 'user' | 'assistant';
@@ -30,12 +38,13 @@ export function isGemmaFailure(response: string): boolean {
 
 /**
  * Call Claude Haiku as fallback for complex queries
+ * Returns both text and token usage (for cost tracking)
  */
 export async function callHaikuFallback(
   userMessage: string,
   conversationHistory: ClaudeMessage[] = [],
   apiKey?: string,
-): Promise<string> {
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
   if (!key) {
     throw new Error('ANTHROPIC_API_KEY not configured');
@@ -56,14 +65,10 @@ export async function callHaikuFallback(
     body: JSON.stringify({
       model: 'claude-3-5-haiku-20241022',
       max_tokens: 1024,
-      system: `You are Andy, a helpful personal assistant. Be brief, friendly, and casual.
-Keep responses under 200 words. Help with weather, reminders, todos, and general chat.
+      system: `You are Clawdia, a helpful personal assistant. Be brief, friendly, and casual.
+Keep responses under 200 words. Help with questions, tasks, and general chat.
 
-For weather: If asked about weather, provide actual information if available.
-For reminders: Help create and manage reminders. Be conversational, not formal.
-For todos: Help organize and list tasks naturally.
-
-Just talk naturally. Don't show code or explain what you're doing unless asked.`,
+Just respond naturally and conversationally.`,
       messages,
     }),
   });
@@ -75,40 +80,83 @@ Just talk naturally. Don't show code or explain what you're doing unless asked.`
 
   const data = (await response.json()) as {
     content: Array<{ type: string; text: string }>;
+    usage: { input_tokens: number; output_tokens: number };
   };
   const textContent = data.content.find((c) => c.type === 'text');
   if (!textContent || textContent.type !== 'text') {
     throw new Error('No text content in Haiku response');
   }
 
-  return textContent.text;
+  return {
+    text: textContent.text,
+    inputTokens: data.usage?.input_tokens || 0,
+    outputTokens: data.usage?.output_tokens || 0,
+  };
 }
 
 /**
- * Smart responder: try Gemma first, fall back to Haiku if it fails
+ * Request user approval for Haiku fallback (cost control)
+ * Returns approval prompt message for user
+ */
+export function getApprovalPrompt(): string {
+  return 'Gemma2 is unable to answer this query. Use Claude Haiku API instead? (/haiku yes or /haiku no)';
+}
+
+/**
+ * Generate usage summary from Haiku response (tokens + cost)
+ */
+export function formatUsageSummary(
+  inputTokens: number,
+  outputTokens: number,
+): string {
+  // Haiku pricing: $0.80/M input tokens, $4.00/M output tokens
+  const inputCost = (inputTokens / 1_000_000) * 0.8;
+  const outputCost = (outputTokens / 1_000_000) * 4.0;
+  const totalCost = inputCost + outputCost;
+
+  return `📊 API Usage:
+Input tokens: ${inputTokens}
+Output tokens: ${outputTokens}
+Estimated cost: $${totalCost.toFixed(5)}
+Model: claude-3-5-haiku-20241022`;
+}
+
+/**
+ * Smart responder: try Gemma first, require user approval for Haiku fallback
+ * Returns { response, usedHaiku, needsApproval, approval? }
  */
 export async function smartRespond(
   userMessage: string,
   gemmaResponse: string,
   conversationHistory: ClaudeMessage[] = [],
-): Promise<{ response: string; usedHaiku: boolean }> {
+): Promise<{ response: string; usedHaiku: boolean; needsApproval?: boolean }> {
   // If Gemma gave a good response, use it
   if (!isGemmaFailure(gemmaResponse)) {
     return { response: gemmaResponse, usedHaiku: false };
   }
 
-  // Gemma failed, try Haiku
-  try {
-    const haikuResponse = await callHaikuFallback(
-      userMessage,
-      conversationHistory,
-    );
-    return { response: haikuResponse, usedHaiku: true };
-  } catch (err) {
-    // Haiku also failed, return Gemma's response as last resort
-    console.error(
-      `Haiku fallback failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return { response: gemmaResponse, usedHaiku: false };
-  }
+  // Gemma failed — signal that approval is needed, don't auto-call Haiku
+  return {
+    response: getApprovalPrompt(),
+    usedHaiku: false,
+    needsApproval: true,
+  };
+}
+
+/**
+ * Execute Haiku fallback after user approval
+ * Includes usage summary in response for cost transparency
+ */
+export async function executeHaikuFallback(
+  userMessage: string,
+  conversationHistory: ClaudeMessage[] = [],
+  apiKey?: string,
+): Promise<{ response: string; inputTokens: number; outputTokens: number }> {
+  const result = await callHaikuFallback(userMessage, conversationHistory, apiKey);
+  const usageSummary = formatUsageSummary(result.inputTokens, result.outputTokens);
+  return {
+    response: `${result.text}\n\n${usageSummary}`,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+  };
 }
