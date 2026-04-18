@@ -141,11 +141,21 @@ function getHelpText(): string {
 }
 
 export function isOpsCommand(text: string): boolean {
+  // formatMessages wraps messages in XML, so search within <message> tags
+  const messageMatch = text.match(/<message[^>]*>([^<]+)<\/message>/);
+  if (messageMatch) {
+    const messageContent = messageMatch[1].trim();
+    return /^\/\w+/.test(messageContent);
+  }
+  // Fallback for raw commands (not wrapped in XML)
   return /^\/\w+/.test(text.trim());
 }
 
 export function parseOpsCommand(text: string): string | null {
-  const match = text.trim().match(/^\/(\w+)/);
+  // formatMessages wraps messages in XML, so search within <message> tags
+  const messageMatch = text.match(/<message[^>]*>([^<]+)<\/message>/);
+  const content = messageMatch ? messageMatch[1].trim() : text.trim();
+  const match = content.match(/^\/(\w+)/);
   return match ? match[1].toLowerCase() : null;
 }
 
