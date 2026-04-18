@@ -156,10 +156,17 @@ export function isOpsCommand(text: string): boolean {
 }
 
 export function parseOpsCommand(text: string): string | null {
-  // formatMessages wraps messages in XML, so search within <message> tags
-  const messageMatch = text.match(/<message[^>]*>([^<]+)<\/message>/);
-  const content = messageMatch ? messageMatch[1].trim() : text.trim();
-  const match = content.match(/^\/(\w+)/);
+  // Find the FIRST message that starts with /, not just the first message
+  const allMessages = text.matchAll(/<message[^>]*>([^<]+)<\/message>/g);
+  for (const match of allMessages) {
+    const content = match[1].trim();
+    const cmdMatch = content.match(/^\/(\w+)/);
+    if (cmdMatch) {
+      return cmdMatch[1].toLowerCase();
+    }
+  }
+  // Fallback for raw commands (not wrapped in XML)
+  const match = text.trim().match(/^\/(\w+)/);
   return match ? match[1].toLowerCase() : null;
 }
 
