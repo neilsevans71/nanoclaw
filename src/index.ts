@@ -65,6 +65,11 @@ import {
 } from './sender-allowlist.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { startTelegramMonitor } from './telegram-monitor.js';
+import {
+  executeOpsCommand,
+  isOpsCommand,
+  parseOpsCommand,
+} from './ops-commands.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
 
@@ -240,6 +245,37 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const prompt = formatMessages(missedMessages, TIMEZONE);
 
+  // Check if this is an ops command (fast, no agent needed)
+  if (isOpsCommand(prompt)) {
+    const cmdName = parseOpsCommand(prompt);
+    if (cmdName) {
+      logger.info(
+        { group: group.name, command: cmdName },
+        'Executing ops command',
+      );
+      try {
+        const result = await executeOpsCommand(cmdName, group.folder);
+        if (result) {
+          await channel.setTyping?.(chatJid, true);
+          await channel.sendMessage(chatJid, result.output);
+          await channel.setTyping?.(chatJid, false);
+          // Advance cursor for ops command
+          lastAgentTimestamp[chatJid] =
+            missedMessages[missedMessages.length - 1].timestamp;
+          saveState();
+          return true;
+        }
+      } catch (err) {
+        logger.warn(
+          { group: group.name, error: err },
+          'Ops command failed',
+        );
+        await channel.setTyping?.(chatJid, false);
+        return false;
+      }
+    }
+  }
+
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
   const previousCursor = lastAgentTimestamp[chatJid] || '';
@@ -283,13 +319,23 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
       // Check if Gemma failed and fall back to Haiku if needed
       if (text && isGemmaFailure(text)) {
-        logger.info({ group: group.name }, `Gemma failed to answer, falling back to Haiku...`);
+        logger.info(
+          { group: group.name },
+          `Gemma failed to answer, falling back to Haiku...`,
+        );
         try {
-          const haikuResponse = await callHaikuFallback(prompt, [], anthropicApiKey);
+          const haikuResponse = await callHaikuFallback(
+            prompt,
+            [],
+            anthropicApiKey,
+          );
           text = haikuResponse;
           logger.info({ group: group.name }, `Haiku fallback successful`);
         } catch (err) {
-          logger.warn({ group: group.name }, `Haiku fallback failed, using Gemma response: ${err instanceof Error ? err.message : String(err)}`);
+          logger.warn(
+            { group: group.name },
+            `Haiku fallback failed, using Gemma response: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
 

@@ -223,40 +223,31 @@ function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
-  // Ollama routing for cost-free local inference (takes priority)
+  // Use local Ollama for model inference
+  // Container connects directly to Ollama host, no proxy needed
   const envConfig = readEnvFile(['OLLAMA_HOST', 'OLLAMA_MODEL']);
-  const ollamaHost = envConfig.OLLAMA_HOST;
-  const ollamaModel = envConfig.OLLAMA_MODEL;
+  const ollamaHost = envConfig.OLLAMA_HOST || 'http://localhost:11434';
+  const ollamaModel = envConfig.OLLAMA_MODEL || 'gemma2:2b';
 
-  if (ollamaHost && ollamaModel) {
-    // When Ollama is configured, route through Ollama proxy
-    args.push(
-      '-e',
-      `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${OLLAMA_PROXY_PORT}`,
-    );
-    args.push('-e', `OLLAMA_HOST=${ollamaHost}`);
-    args.push('-e', `OLLAMA_MODEL=${ollamaModel}`);
-    // Keep Ollama model in memory for 5 minutes between requests (Spec 11 optimization)
-    args.push('-e', 'OLLAMA_KEEP_ALIVE=300s');
-    // Dummy API key so Claude Code can initialize
-    args.push('-e', 'ANTHROPIC_API_KEY=ollama-local-proxy');
+  args.push('-e', `OLLAMA_HOST=${ollamaHost}`);
+  args.push('-e', `OLLAMA_MODEL=${ollamaModel}`);
+
+  // Fallback to Claude API via credential proxy if local model is unavailable
+  // This allows hybrid mode where Gemma handles most queries, Haiku handles edge cases
+  args.push(
+    '-e',
+    `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
+  );
+
+  // Mirror the host's auth method with a placeholder value.
+  // API key mode: SDK sends x-api-key, proxy replaces with real key.
+  // OAuth mode:   SDK exchanges placeholder token for temp API key,
+  //               proxy injects real OAuth token on that exchange request.
+  const authMode = detectAuthMode();
+  if (authMode === 'api-key') {
+    args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
   } else {
-    // Fall back to Claude API if Ollama not configured
-    args.push(
-      '-e',
-      `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
-    );
-
-    // Mirror the host's auth method with a placeholder value.
-    // API key mode: SDK sends x-api-key, proxy replaces with real key.
-    // OAuth mode:   SDK exchanges placeholder token for temp API key,
-    //               proxy injects real OAuth token on that exchange request.
-    const authMode = detectAuthMode();
-    if (authMode === 'api-key') {
-      args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
-    } else {
-      args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
-    }
+    args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
   // Runtime-specific args for host gateway resolution

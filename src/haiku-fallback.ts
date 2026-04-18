@@ -18,14 +18,14 @@ export function isGemmaFailure(response: string): boolean {
     /don't have real-time/i,
     /unable to.*weather/i,
     /not connected to.*api/i,
-    /^```(python|javascript|code)/,  // Starts with code block
-    /^print\(/,  // Starts with print statement
+    /^```(python|javascript|code)/, // Starts with code block
+    /^print\(/, // Starts with print statement
     /i'm not able to/i,
     /as an ai.*can't/i,
     /as a language model.*can't/i,
   ];
 
-  return failurePatterns.some(pattern => pattern.test(response));
+  return failurePatterns.some((pattern) => pattern.test(response));
 }
 
 /**
@@ -73,8 +73,10 @@ Just talk naturally. Don't show code or explain what you're doing unless asked.`
     throw new Error(`Haiku API error ${response.status}: ${error}`);
   }
 
-  const data = (await response.json()) as { content: Array<{ type: string; text: string }> };
-  const textContent = data.content.find(c => c.type === 'text');
+  const data = (await response.json()) as {
+    content: Array<{ type: string; text: string }>;
+  };
+  const textContent = data.content.find((c) => c.type === 'text');
   if (!textContent || textContent.type !== 'text') {
     throw new Error('No text content in Haiku response');
   }
@@ -97,11 +99,16 @@ export async function smartRespond(
 
   // Gemma failed, try Haiku
   try {
-    const haikuResponse = await callHaikuFallback(userMessage, conversationHistory);
+    const haikuResponse = await callHaikuFallback(
+      userMessage,
+      conversationHistory,
+    );
     return { response: haikuResponse, usedHaiku: true };
   } catch (err) {
     // Haiku also failed, return Gemma's response as last resort
-    console.error(`Haiku fallback failed: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `Haiku fallback failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return { response: gemmaResponse, usedHaiku: false };
   }
 }
