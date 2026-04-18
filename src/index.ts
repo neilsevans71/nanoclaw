@@ -244,18 +244,39 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       );
       try {
         const result = await executeOpsCommand(cmdName, group.folder);
+        logger.info(
+          { group: group.name, command: cmdName, hasResult: !!result },
+          'Ops command executed',
+        );
         if (result) {
+          logger.info(
+            {
+              group: group.name,
+              command: cmdName,
+              outputLength: result.output.length,
+            },
+            'Sending ops command result to channel',
+          );
           await channel.setTyping?.(chatJid, true);
           await channel.sendMessage(chatJid, result.output);
           await channel.setTyping?.(chatJid, false);
+          logger.info({ group: group.name, command: cmdName }, 'Ops result sent');
           // Advance cursor for ops command
           lastAgentTimestamp[chatJid] =
             missedMessages[missedMessages.length - 1].timestamp;
           saveState();
           return true;
+        } else {
+          logger.warn(
+            { group: group.name, command: cmdName },
+            'Ops command returned null',
+          );
         }
       } catch (err) {
-        logger.warn({ group: group.name, error: err }, 'Ops command failed');
+        logger.warn(
+          { group: group.name, command: cmdName, error: err },
+          'Ops command failed',
+        );
         await channel.setTyping?.(chatJid, false);
         return false;
       }
