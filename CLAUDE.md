@@ -18,6 +18,7 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 | `src/container-runner.ts` | Spawns agent containers with mounts |
 | `src/task-scheduler.ts` | Runs scheduled tasks |
 | `src/db.ts` | SQLite operations |
+| `src/ops-commands.ts` | Fast ops commands (/help, /status, /memory, /disk, /logs, /processes, /health) |
 | `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
 | `container/skills/` | Skills loaded inside agent containers (browser, status, formatting) |
 
@@ -73,3 +74,28 @@ systemctl --user restart nanoclaw
 ## Container Build Cache
 
 The container buildkit caches the build context aggressively. `--no-cache` alone does NOT invalidate COPY steps — the builder's volume retains stale files. To force a truly clean rebuild, prune the builder then re-run `./container/build.sh`.
+
+## Ops Commands (Spec 61)
+
+Fast, non-LLM commands for system monitoring. These execute instantly without loading the model:
+
+- `/help` — List all ops commands
+- `/status` — Service health (PostgreSQL, Ollama, NanoClaw, RSS daemon)
+- `/memory` — Memory breakdown (free, active, inactive, compressed, pressure)
+- `/disk` — Disk usage by volume
+- `/logs` — Last 30 lines of NanoClaw container logs
+- `/processes` — Top 10 processes by memory usage
+- `/health` — Full system diagnostic (status + memory + disk)
+
+These bypass the trigger requirement and agent container execution. Implemented in `src/ops-commands.ts`, executed directly by the main process.
+
+## Podman Container Execution
+
+NanoClaw uses Podman with virtio-fs shared directory mounts for agent container execution. Key considerations:
+
+- **Container image:** Uses `localhost/nanoclaw-agent:latest` (local build, not Docker Hub)
+- **Mount paths:** `/Users/clawdia/nanoclaw` shared from macOS to Podman machine via virtio-fs
+- **Hybrid LLM:** Local `gemma2:2b` (ollama) with Haiku API fallback via credential proxy
+- **Watchdog:** Monitors Podman mount health, container image availability, and NanoClaw process
+
+If Podman mounts fail (virtio-fs disconnection), the watchdog will restart the machine and rebuild the container image. See `scripts/watchdog.sh` checks 8–9.

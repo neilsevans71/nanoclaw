@@ -260,7 +260,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           await channel.setTyping?.(chatJid, true);
           await channel.sendMessage(chatJid, result.output);
           await channel.setTyping?.(chatJid, false);
-          logger.info({ group: group.name, command: cmdName }, 'Ops result sent');
+          logger.info(
+            { group: group.name, command: cmdName },
+            'Ops result sent',
+          );
           // Advance cursor for ops command
           lastAgentTimestamp[chatJid] =
             missedMessages[missedMessages.length - 1].timestamp;
