@@ -199,12 +199,25 @@ export async function executeOpsCommand(
       };
 
     case 'logs':
-      // Try to read NanoClaw logs
+      // Try to read NanoClaw container logs from the group
       const logsDir = path.join(process.cwd(), 'groups', groupFolder, 'logs');
-      const logFile = path.join(logsDir, 'nanoclaw.log');
+      // Look for most recent container log
+      try {
+        const files = fs.readdirSync(logsDir).sort().reverse();
+        const logFile = files.length > 0 ? path.join(logsDir, files[0]) : null;
+        if (logFile) {
+          return {
+            command,
+            output: getLogsTail(logFile, 30),
+            timestamp: Date.now(),
+          };
+        }
+      } catch {
+        // Logs directory doesn't exist yet
+      }
       return {
         command,
-        output: getLogsTail(logFile, 30),
+        output: 'No logs available yet (container has not run)',
         timestamp: Date.now(),
       };
 
