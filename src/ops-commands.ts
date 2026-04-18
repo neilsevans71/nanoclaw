@@ -75,9 +75,7 @@ function getDiskStatus(): string {
 
 function getProcessStatus(): string {
   try {
-    const output = execSync(
-      "ps aux | sort -k3 -nr | head -10",
-    ).toString();
+    const output = execSync('ps aux | sort -k3 -nr | head -10').toString();
     return `Top Processes by Memory:\n${output}`;
   } catch (err) {
     return `Error reading processes: ${String(err)}`;
@@ -128,6 +126,18 @@ function getHealthDiagnostic(): string {
     getDiskStatus(),
   ];
   return diagnostics.join('\n');
+}
+
+function getHelpText(): string {
+  return `Available ops commands (fast, no LLM needed):
+
+/status   — Service health (PostgreSQL, Ollama, NanoClaw, RSS daemon)
+/memory   — Memory breakdown (free, active, inactive, compressed, pressure)
+/disk     — Disk usage by volume
+/logs     — Last 30 lines of NanoClaw logs
+/processes — Top 10 processes by memory usage
+/health   — Full system diagnostic (status + memory + disk)
+/help     — This message`;
 }
 
 export function isOpsCommand(text: string): boolean {
@@ -188,6 +198,13 @@ export async function executeOpsCommand(
       return {
         command,
         output: getHealthDiagnostic(),
+        timestamp: Date.now(),
+      };
+
+    case 'help':
+      return {
+        command,
+        output: getHelpText(),
         timestamp: Date.now(),
       };
 

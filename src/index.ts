@@ -266,10 +266,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           return true;
         }
       } catch (err) {
-        logger.warn(
-          { group: group.name, error: err },
-          'Ops command failed',
-        );
+        logger.warn({ group: group.name, error: err }, 'Ops command failed');
         await channel.setTyping?.(chatJid, false);
         return false;
       }
