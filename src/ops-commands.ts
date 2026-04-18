@@ -25,9 +25,12 @@ function parseVmStat(): Record<string, number> {
     const output = execSync('vm_stat').toString();
     const result: Record<string, number> = {};
     for (const line of output.split('\n')) {
-      const match = line.match(/^(.*?):\s+(\d+)\s*$/);
+      // Match lines like "Pages free:                                9404."
+      // or "Pageins:                               75380716."
+      const match = line.match(/^(.*?):\s+(\d+)\.?\s*$/);
       if (match) {
-        result[match[1].trim()] = parseInt(match[2], 10);
+        const key = match[1].trim().replace(/^["']|["']$/g, ''); // Remove quotes if present
+        result[key] = parseInt(match[2], 10);
       }
     }
     return result;
@@ -41,13 +44,14 @@ function getMemoryStatus(): string {
     const stats = parseVmStat();
     if (Object.keys(stats).length === 0) return 'Unable to read memory stats';
 
-    // vm_stat reports in pages (4KB each on macOS)
-    const pageSize = 4096;
+    // vm_stat reports in pages (4KB on ARM, 16KB on some systems)
+    // Default to 16KB based on vm_stat header "page size of 16384 bytes"
+    const pageSize = 16384;
     const free = (stats['Pages free'] || 0) * pageSize;
     const active = (stats['Pages active'] || 0) * pageSize;
     const inactive = (stats['Pages inactive'] || 0) * pageSize;
-    const compressed = (stats['Pages compressed'] || 0) * pageSize;
     const wired = (stats['Pages wired down'] || 0) * pageSize;
+    const compressed = (stats['Pages stored in compressor'] || 0) * pageSize;
 
     const pageins = stats['Pageins'] || 0;
     const pageouts = stats['Pageouts'] || 0;
@@ -56,8 +60,8 @@ function getMemoryStatus(): string {
 Free: ${formatBytes(free)}
 Active: ${formatBytes(active)}
 Inactive: ${formatBytes(inactive)}
-Compressed: ${formatBytes(compressed)}
 Wired: ${formatBytes(wired)}
+Compressed: ${formatBytes(compressed)}
 Pressure (pageins/outs): ${pageins}/${pageouts}`;
   } catch (err) {
     return `Error reading memory: ${String(err)}`;
