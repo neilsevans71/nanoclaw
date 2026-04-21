@@ -803,9 +803,7 @@ async function main(): Promise<void> {
     logger.info('\n🔐 Auth Configuration');
     logger.info(`├─ Method: ${authConfig.method}`);
     logger.info(`├─ Description: ${authConfig.description}`);
-    logger.info(
-      `├─ Health check: ${authConfig.healthCheck() ? '✓' : '✗'}`
-    );
+    logger.info(`├─ Health check: ${authConfig.healthCheck() ? '✓' : '✗'}`);
     logger.info(`└─ Status: Ready\n`);
 
     if (!authConfig.healthCheck()) {
@@ -821,10 +819,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   } catch (error) {
-    logger.error(
-      { error: String(error) },
-      'Failed to initialize auth adapter'
-    );
+    logger.error({ error: String(error) }, 'Failed to initialize auth adapter');
     process.exit(1);
   }
 

@@ -52,7 +52,7 @@ export function startCredentialProxy(
     if (!oauthToken) {
       logger.warn(
         'NANOCLAW_AUTH_METHOD=claude-cli but no OAuth token detected. ' +
-          'Ensure Claude CLI is authenticated with: claude setup-token'
+          'Ensure Claude CLI is authenticated with: claude setup-token',
       );
     }
   } else if (apiKey) {
@@ -65,7 +65,7 @@ export function startCredentialProxy(
 
   logger.info(
     { configuredMethod, detectedMode: authMode },
-    'Credential proxy auth mode'
+    'Credential proxy auth mode',
   );
 
   const upstreamUrl = new URL(
@@ -149,7 +149,7 @@ export function startCredentialProxy(
             : 'OAuth (container token exchange)';
       logger.info(
         { port, host, authMode, description: modeDesc },
-        'Credential proxy started'
+        'Credential proxy started',
       );
       resolve(server);
     });

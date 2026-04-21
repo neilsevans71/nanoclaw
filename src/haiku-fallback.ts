@@ -152,8 +152,15 @@ export async function executeHaikuFallback(
   conversationHistory: ClaudeMessage[] = [],
   apiKey?: string,
 ): Promise<{ response: string; inputTokens: number; outputTokens: number }> {
-  const result = await callHaikuFallback(userMessage, conversationHistory, apiKey);
-  const usageSummary = formatUsageSummary(result.inputTokens, result.outputTokens);
+  const result = await callHaikuFallback(
+    userMessage,
+    conversationHistory,
+    apiKey,
+  );
+  const usageSummary = formatUsageSummary(
+    result.inputTokens,
+    result.outputTokens,
+  );
   return {
     response: `${result.text}\n\n${usageSummary}`,
     inputTokens: result.inputTokens,

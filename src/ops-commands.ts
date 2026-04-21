@@ -143,7 +143,8 @@ Health: ${healthStatus}`;
 
 function triggerDigest(): string {
   try {
-    const digestScript = '/Users/clawdia/datacentre/scripts/rss-digest-v3-tagged.js';
+    const digestScript =
+      '/Users/clawdia/datacentre/scripts/rss-digest-v3-tagged.js';
     if (!fs.existsSync(digestScript)) {
       return 'Error: Digest script not found at ' + digestScript;
     }
