@@ -5,6 +5,7 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { getAuthConfig } from './auth-adapter.js';
 
 export interface OpsCommandResult {
   command: string;
@@ -121,6 +122,25 @@ function getLogsTail(logFile: string, lines: number = 20): string {
   }
 }
 
+function getAuthStatus(): string {
+  try {
+    const authConfig = getAuthConfig();
+    const healthStatus = authConfig.healthCheck() ? '✓' : '✗';
+    let details = `Auth Status:
+Method: ${authConfig.method}
+Description: ${authConfig.description}
+Health: ${healthStatus}`;
+
+    if (authConfig.cliVersion) {
+      details += `\nCLI Version: ${authConfig.cliVersion}`;
+    }
+
+    return details;
+  } catch (err) {
+    return `Error reading auth config: ${String(err).substring(0, 100)}`;
+  }
+}
+
 function getHealthDiagnostic(): string {
   const diagnostics = [
     getServiceStatus(),
@@ -136,6 +156,7 @@ function getHelpText(): string {
   return `Available ops commands (fast, no LLM needed):
 
 /status   — Service health (PostgreSQL, Ollama, NanoClaw, RSS daemon)
+/auth     — Current auth method (API Key or Claude CLI Pro)
 /memory   — Memory breakdown (free, active, inactive, compressed, pressure)
 /disk     — Disk usage by volume
 /logs     — Last 30 lines of NanoClaw logs
@@ -181,6 +202,13 @@ export async function executeOpsCommand(
       return {
         command,
         output: getServiceStatus(),
+        timestamp: Date.now(),
+      };
+
+    case 'auth':
+      return {
+        command,
+        output: getAuthStatus(),
         timestamp: Date.now(),
       };
 
