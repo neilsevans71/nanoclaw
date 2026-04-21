@@ -141,6 +141,22 @@ Health: ${healthStatus}`;
   }
 }
 
+function triggerDigest(): string {
+  try {
+    const digestScript = '/Users/clawdia/datacentre/scripts/rss-digest-v3-tagged.js';
+    if (!fs.existsSync(digestScript)) {
+      return 'Error: Digest script not found at ' + digestScript;
+    }
+
+    // Run the digest script asynchronously (don't wait for it)
+    // This allows the ops command to return immediately
+    execSync(`node ${digestScript} > /dev/null 2>&1 &`, { timeout: 2000 });
+    return 'Digest resend triggered. Check logs in ~10 seconds for result.';
+  } catch (err) {
+    return `Error triggering digest: ${String(err).substring(0, 100)}`;
+  }
+}
+
 function getHealthDiagnostic(): string {
   const diagnostics = [
     getServiceStatus(),
@@ -157,6 +173,7 @@ function getHelpText(): string {
 
 /status   — Service health (PostgreSQL, Ollama, NanoClaw, RSS daemon)
 /auth     — Current auth method (API Key or Claude CLI Pro)
+/digest   — Force resend morning digest (runs immediately, takes ~10s)
 /memory   — Memory breakdown (free, active, inactive, compressed, pressure)
 /disk     — Disk usage by volume
 /logs     — Last 30 lines of NanoClaw logs
@@ -209,6 +226,13 @@ export async function executeOpsCommand(
       return {
         command,
         output: getAuthStatus(),
+        timestamp: Date.now(),
+      };
+
+    case 'digest':
+      return {
+        command,
+        output: triggerDigest(),
         timestamp: Date.now(),
       };
 
