@@ -232,21 +232,22 @@ function buildContainerArgs(
   args.push('-e', `OLLAMA_HOST=${ollamaHost}`);
   args.push('-e', `OLLAMA_MODEL=${ollamaModel}`);
 
-  // Fallback to Claude API via credential proxy if local model is unavailable
-  // This allows hybrid mode where Gemma handles most queries, Haiku handles edge cases
-  args.push(
-    '-e',
-    `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
-  );
+  // Use Ollama proxy as primary, which routes to Gemma2 locally
+  // If Ollama isn't configured, falls back to Claude API via credential proxy
+  const baseUrl = ollamaHost
+    ? `http://${CONTAINER_HOST_GATEWAY}:${OLLAMA_PROXY_PORT}`
+    : `http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`;
+  args.push('-e', `ANTHROPIC_BASE_URL=${baseUrl}`);
 
   // Mirror the host's auth method with a placeholder value.
-  // API key mode: SDK sends x-api-key, proxy replaces with real key.
-  // OAuth mode:   SDK exchanges placeholder token for temp API key,
-  //               proxy injects real OAuth token on that exchange request.
+  // API key mode:   SDK sends x-api-key, proxy replaces with real key.
+  // OAuth mode:     SDK exchanges placeholder token for temp API key,
+  //                 proxy injects real OAuth token on that exchange request.
+  // Claude CLI mode: Treated as OAuth (uses token exchange flow).
   const authMode = detectAuthMode();
   if (authMode === 'api-key') {
     args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
-  } else {
+  } else if (authMode === 'claude-cli' || authMode === 'oauth') {
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 

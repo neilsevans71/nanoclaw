@@ -11,6 +11,7 @@ import {
   TRIGGER_PATTERN,
 } from './config.js';
 import { startCredentialProxy } from './credential-proxy.js';
+import { getAuthConfig } from './auth-adapter.js';
 import { startOllamaProxy } from './ollama-proxy.js';
 import { readEnvFile } from './env.js';
 import {
@@ -250,7 +251,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!approval) {
       await channel.sendMessage(
         chatJid,
-        'No pending Gemma2 fallback request. Send a message and I\'ll ask if you want to use Haiku.',
+        "No pending Gemma2 fallback request. Send a message and I'll ask if you want to use Haiku.",
       );
       return true;
     }
@@ -437,7 +438,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           conversationHistory: [],
         });
         // Send approval prompt to user
-        text = 'Gemma2 is unable to answer this query. Use Claude Haiku API instead? (/haiku yes or /haiku no)';
+        text =
+          'Gemma2 is unable to answer this query. Use Claude Haiku API instead? (/haiku yes or /haiku no)';
       }
 
       if (text) {
@@ -794,6 +796,37 @@ async function main(): Promise<void> {
     CREDENTIAL_PROXY_PORT,
     PROXY_BIND_HOST,
   );
+
+  // Log auth configuration at startup
+  try {
+    const authConfig = getAuthConfig();
+    logger.info('\n🔐 Auth Configuration');
+    logger.info(`├─ Method: ${authConfig.method}`);
+    logger.info(`├─ Description: ${authConfig.description}`);
+    logger.info(
+      `├─ Health check: ${authConfig.healthCheck() ? '✓' : '✗'}`
+    );
+    logger.info(`└─ Status: Ready\n`);
+
+    if (!authConfig.healthCheck()) {
+      logger.error(`❌ Auth health check failed!`);
+      logger.error(`   Method: ${authConfig.method}`);
+
+      if (authConfig.method === 'api-key') {
+        logger.error(`   Fix: Set valid ANTHROPIC_API_KEY in .env`);
+      } else if (authConfig.method === 'claude-cli') {
+        logger.error(`   Fix: Run 'claude setup-token' to authenticate`);
+      }
+
+      process.exit(1);
+    }
+  } catch (error) {
+    logger.error(
+      { error: String(error) },
+      'Failed to initialize auth adapter'
+    );
+    process.exit(1);
+  }
 
   // Start Ollama proxy if Ollama is configured
   let ollamaProxyServer: any = null;
