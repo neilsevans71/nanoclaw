@@ -9,6 +9,7 @@
  */
 
 import { execSync } from 'child_process';
+import { readEnvFile } from './env.js';
 
 export interface AuthConfig {
   method: 'api-key' | 'claude-cli';
@@ -19,9 +20,15 @@ export interface AuthConfig {
   healthCheck: () => boolean;
 }
 
-const authMethod = process.env.NANOCLAW_AUTH_METHOD || 'api-key';
+// Read auth method from .env file (not from process.env, which isn't auto-populated)
+function getConfiguredAuthMethod(): string {
+  const config = readEnvFile(['NANOCLAW_AUTH_METHOD']);
+  return config.NANOCLAW_AUTH_METHOD || 'api-key';
+}
 
 export function getAuthConfig(): AuthConfig {
+  const authMethod = getConfiguredAuthMethod();
+
   switch (authMethod) {
     case 'claude-cli':
       return getClaudeCliAuth();
@@ -32,11 +39,12 @@ export function getAuthConfig(): AuthConfig {
 }
 
 function getApiKeyAuth(): AuthConfig {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const config = readEnvFile(['ANTHROPIC_API_KEY']);
+  const apiKey = config.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      'NANOCLAW_AUTH_METHOD=api-key but ANTHROPIC_API_KEY not set in .env'
+      'NANOCLAW_AUTH_METHOD=api-key but ANTHROPIC_API_KEY not set in .env',
     );
   }
 
@@ -47,7 +55,7 @@ function getApiKeyAuth(): AuthConfig {
     healthCheck: () => {
       // Verify API key format (starts with sk-ant-)
       return Boolean(apiKey && apiKey.startsWith('sk-ant'));
-    }
+    },
   };
 }
 
@@ -60,7 +68,7 @@ function getClaudeCliAuth(): AuthConfig {
   } catch (error) {
     throw new Error(
       'NANOCLAW_AUTH_METHOD=claude-cli but Claude CLI not found. ' +
-      'Install with: npm install -g @anthropic-ai/claude'
+        'Install with: npm install -g @anthropic-ai/claude',
     );
   }
 
@@ -68,11 +76,11 @@ function getClaudeCliAuth(): AuthConfig {
   try {
     execSync('claude auth status', {
       encoding: 'utf-8',
-      stdio: 'pipe'
+      stdio: 'pipe',
     });
   } catch (error) {
     throw new Error(
-      'Claude CLI found but not authenticated. Run: claude setup-token'
+      'Claude CLI found but not authenticated. Run: claude setup-token',
     );
   }
 
@@ -88,11 +96,11 @@ function getClaudeCliAuth(): AuthConfig {
       } catch {
         return false;
       }
-    }
+    },
   };
 }
 
 export const METHODS = {
   API_KEY: 'api-key',
-  CLAUDE_CLI: 'claude-cli'
+  CLAUDE_CLI: 'claude-cli',
 };
