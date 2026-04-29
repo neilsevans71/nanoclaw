@@ -1,7 +1,10 @@
-# Claude Code memory management
-.claude/projects/*/memory/        # Local memory (per-machine, not synced)
-!.claude/memory-backups/          # But keep backups in git
-!.claude/memory-backups/*.tar.gz
+# Claude Code local memory (auto-memory, session memory)
+.claude/projects/*/memory/
+.claude/projects/*/.memory/
+
+# BUT include backups (git-versioned)
+!.claude/memory-backups/
+!.claude/memory-backups/**
 
 # Dependencies
 node_modules/
