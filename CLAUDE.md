@@ -98,6 +98,31 @@ Three-layer memory architecture ensures no learnings are lost:
 
 See `docs/MEMORY-MANAGEMENT.md` for complete workflow details.
 
+## Parallel Development with Worktrees
+
+For parallel Claude Code sessions in nanoclaw, use worktrees:
+
+```bash
+# Terminal 1: Feature branch
+claude --worktree feature-discord-integration
+
+# Terminal 2: Bug fix (runs in parallel)
+claude --worktree bugfix-telegram-commands
+
+# Both sessions run isolated by branch and working directory
+```
+
+Each worktree gets:
+- **Isolated working directory** at `.claude/worktrees/[name]/`
+- **Dedicated branch** `worktree-[name]`
+- **No file conflicts** between sessions
+
+After the session:
+- Claude automatically cleans up if no changes were made
+- If changes exist, you're prompted to keep or discard the worktree
+
+Memory is still shared across all sessions via Auto Memory layer, so learnings from parallel work are automatically captured.
+
 ## Troubleshooting
 
 **WhatsApp not connecting after upgrade:** WhatsApp is now a separate skill, not bundled in core. Run `/add-whatsapp` (or `npx tsx scripts/apply-skill.ts .claude/skills/add-whatsapp && npm run build`) to install it. Existing auth credentials and groups are preserved.
