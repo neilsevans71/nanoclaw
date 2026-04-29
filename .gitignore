@@ -1,3 +1,8 @@
+# Claude Code memory management
+.claude/projects/*/memory/        # Local memory (per-machine, not synced)
+!.claude/memory-backups/          # But keep backups in git
+!.claude/memory-backups/*.tar.gz
+
 # Dependencies
 node_modules/
 .npm-cache/

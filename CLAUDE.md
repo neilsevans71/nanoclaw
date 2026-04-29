@@ -67,6 +67,37 @@ systemctl --user stop nanoclaw
 systemctl --user restart nanoclaw
 ```
 
+## Memory Management
+
+Three-layer memory architecture ensures no learnings are lost:
+
+**Layer 1: Auto Memory** (Automatic, continuous)
+- Location: `~/.claude/projects/-Users-clawdia-nanoclaw/memory/`
+- Triggered: Every ~5K tokens (Claude Code writes continuously)
+- Captures: Learnings, patterns, decisions from development sessions
+- Persistence: Session-local (stays on disk until deleted)
+
+**Layer 2: PreCompact Hooks** (Automatic, at compression)
+- Trigger: Before `/compact` (manual or automatic at ~80% context)
+- Captures: Full memory state snapshot before context compression
+- Location: `.claude/pre-compact-backups/` in repo
+- Purpose: Insurance against losing insights just before compression
+
+**Layer 3: Checkpoint** (Manual, explicit versioning)
+- Trigger: `./cp "message"` (you decide when to save)
+- Captures: Memory snapshot + code + git commit
+- Location: `.claude/memory-backups/` in repo (committed to git)
+- Persistence: GitHub (durable, long-term backup)
+
+**Quick commands:**
+```bash
+./cp "feat: add new feature"  # Layer 3: Backs up memory + commits + pushes
+./scripts/restore-memory.sh   # Restore on new machine
+./scripts/init-memory.sh      # Initialize memory for new sessions
+```
+
+See `docs/MEMORY-MANAGEMENT.md` for complete workflow details.
+
 ## Troubleshooting
 
 **WhatsApp not connecting after upgrade:** WhatsApp is now a separate skill, not bundled in core. Run `/add-whatsapp` (or `npx tsx scripts/apply-skill.ts .claude/skills/add-whatsapp && npm run build`) to install it. Existing auth credentials and groups are preserved.
